@@ -2,98 +2,71 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>AI Control ESP32</title>
+  <title>AI ESP32</title>
 
-  <!-- Load thư viện -->
+  <!-- QUAN TRỌNG: phải load đúng -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
-
-  <style>
-    body { font-family: Arial; text-align: center; }
-    video, canvas { margin-top: 10px; }
-  </style>
 </head>
 
 <body>
 
-<h2>AI Control ESP32 (Teachable Machine)</h2>
+<h2>AI Control ESP32</h2>
 <button onclick="init()">Start Camera</button>
 
-<div id="status">Status: Waiting...</div>
+<p id="result">Waiting...</p>
 
 <script>
 const URL = "https://teachablemachine.withgoogle.com/models/FX7M1MGaT/";
 
 const USERNAME = "PhuNguyenLe";
-const AIO_KEY = "aio_fEvA28yfSlwZjxQyJ9U5PULLdhfq";
+const AIO_KEY = "PASTE_KEY_MOI"; // đổi key mới
 const FEED = "led";
 
 let model, webcam;
-let lastSent = "";
-let lastTime = 0;
 
 async function init() {
-    try {
-        document.getElementById("status").innerText = "Loading model...";
+    console.log("Start init");
 
-        model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+    model = await tmImage.load(URL + "model.json", URL + "metadata.json");
 
-        webcam = new tmImage.Webcam(300, 300, true);
-        await webcam.setup();
-        await webcam.play();
+    webcam = new tmImage.Webcam(200, 200, true);
+    await webcam.setup();
+    await webcam.play();
 
-        document.body.appendChild(webcam.canvas);
+    document.body.appendChild(webcam.canvas);
 
-        document.getElementById("status").innerText = "Camera started";
-
-        window.requestAnimationFrame(loop);
-    } catch (e) {
-        console.error(e);
-        alert("Lỗi mở camera hoặc load model!");
-    }
+    loop();
 }
 
 async function loop() {
     webcam.update();
-    await predict();
-    window.requestAnimationFrame(loop);
-}
 
-async function predict() {
     const prediction = await model.predict(webcam.canvas);
 
-    let best = prediction.reduce((max, p) =>
-        p.probability > max.probability ? p : max
-    );
+    let best = prediction.reduce((a,b)=>a.probability>b.probability?a:b);
 
-    document.getElementById("status").innerText =
-        best.className + " (" + best.probability.toFixed(2) + ")";
+    document.getElementById("result").innerText =
+        best.className + " " + best.probability.toFixed(2);
 
-    let now = Date.now();
-
-    // tránh spam API (2 giây mới gửi lại)
-    if (best.probability > 0.9 &&
-        best.className !== lastSent &&
-        now - lastTime > 2000) {
-
-        sendToAdafruit(best.className);
-
-        lastSent = best.className;
-        lastTime = now;
+    if(best.probability > 0.9){
+        send(best.className);
     }
+
+    requestAnimationFrame(loop);
 }
 
-function sendToAdafruit(value) {
+function send(value){
+    console.log("Sending:", value);
+
     fetch(`https://io.adafruit.com/api/v2/${USERNAME}/feeds/${FEED}/data`, {
         method: "POST",
         headers: {
             "X-AIO-Key": AIO_KEY,
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ value: value })
-    })
-    .then(res => console.log("Sent:", value))
-    .catch(err => console.error("Send error:", err));
+        body: JSON.stringify({value:value})
+    });
 }
 </script>
 
